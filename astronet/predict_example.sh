@@ -18,7 +18,7 @@ bazel-bin/astronet/predict \
   --model_dir=${MODEL_DIR} \
   --kepler_data_dir=${KEPLER_DATA_DIR} \
   --kepler_id=11442793 \
-  --period=14.44912 \
-  --t0=2.2 \
-  --duration=0.11267 \
+  --period=91.9395 \
+  --t0=134.307\
+  --duration=0.4175 \
   --output_image_file="kepler-90i.png"
