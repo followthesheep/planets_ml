@@ -178,3 +178,24 @@ def read_kepler_light_curve(filenames,
       all_flux.append(flux)
 
   return all_time, all_flux
+
+def k2_filenames(base_dir,epic_id):
+    filename = os.path.join(base_dir,'hlsp_k2varcat_k2_lightcurve_%s-c00_kepler_v2_llc.fits' % str(epic_id))
+    return filename
+
+def read_k2_light_curve(filename,detrended=True):
+    '''
+    Read in a K2 light curve, which is stored as a fits table. 
+    Optionally, return the detrended flux.
+    '''
+    
+    hdu = fits.open(filename)
+    tab = hdu[1].data
+    time = tab['TIME']
+    if detrended:
+        flux = tab['DETFLUX']
+    else:
+        flux = tab['APTFLUX']
+        
+    return time, flux
+
