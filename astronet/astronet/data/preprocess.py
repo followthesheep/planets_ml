@@ -27,66 +27,73 @@ from light_curve_util import util
 from third_party.kepler_spline import kepler_spline
 
 
-def read_and_process_light_curve(kepid, kepler_data_dir, max_gap_width=0.75):
-  """Reads a light curve, fits a B-spline and divides the curve by the spline.
+def read_and_process_light_curve(kepid, kepler_data_dir, max_gap_width=0.75,k2=False):
+    """Reads a light curve, fits a B-spline and divides the curve by the spline.
 
-  Args:
+    Args:
     kepid: Kepler id of the target star.
     kepler_data_dir: Base directory containing Kepler data. See
         kepler_io.kepler_filenames().
     max_gap_width: Gap size (in days) above which the light curve is split for
         the fitting of B-splines.
 
-  Returns:
+    Returns:
     time: 1D NumPy array; the time values of the light curve.
     flux: 1D NumPy array; the normalized flux values of the light curve.
 
-  Raises:
+    Raises:
     IOError: If the light curve files for this Kepler ID cannot be found.
     ValueError: If the spline could not be fit.
-  """
-  # Read the Kepler light curve.
-  file_names = kepler_io.kepler_filenames(kepler_data_dir, kepid)
-  if not file_names:
-    raise IOError("Failed to find .fits files in %s for Kepler ID %s" %
-                  (kepler_data_dir, kepid))
+    """
+    # Read the Kepler light curve.
 
-  all_time, all_flux = kepler_io.read_kepler_light_curve(file_names)
+    if k2:
+        # note k2 uses EPIC ids
+        file_names = kepler_io.k2_filenames(kepler_data_dir,kepid)
+        time,flux = kepler_io.read_k2_light_curve(file_names)
+        return time,flux
+    else:
+      file_names = kepler_io.kepler_filenames(kepler_data_dir, kepid)
+      if not file_names:
+        raise IOError("Failed to find .fits files in %s for Kepler ID %s" %
+                      (kepler_data_dir, kepid))
 
-  # Split on gaps.
-  all_time, all_flux = util.split(all_time, all_flux, gap_width=max_gap_width)
+      all_time, all_flux = kepler_io.read_kepler_light_curve(file_names)
 
-  # Logarithmically sample candidate break point spacings between 0.5 and 20
-  # days.
-  bkspaces = np.logspace(np.log10(0.5), np.log10(20), num=20)
+      # Split on gaps.
+      all_time, all_flux = util.split(all_time, all_flux, gap_width=max_gap_width)
 
-  # Generate spline.
-  spline = kepler_spline.choose_kepler_spline(
-      all_time, all_flux, bkspaces, penalty_coeff=1.0, verbose=False)[0]
+      # Logarithmically sample candidate break point spacings between 0.5 and 20
+      # days.
+      bkspaces = np.logspace(np.log10(0.5), np.log10(20), num=20)
 
-  if spline is None:
-    raise ValueError("Failed to fit spline with Kepler ID %s", kepid)
+      # Generate spline.
+      spline = kepler_spline.choose_kepler_spline(
+          all_time, all_flux, bkspaces, penalty_coeff=1.0, verbose=False)[0]
 
-  # Concatenate the piecewise light curve and spline.
-  time = np.concatenate(all_time)
-  flux = np.concatenate(all_flux)
-  spline = np.concatenate(spline)
+      if spline is None:
+        raise ValueError("Failed to fit spline with Kepler ID %s", kepid)
 
-  # In rare cases the piecewise spline contains NaNs in places the spline could
-  # not be fit. We can't normalize those points if the spline isn't defined
-  # there. Instead we just remove them.
-  finite_i = np.isfinite(spline)
-  if not np.all(finite_i):
-    tf.logging.warn("Incomplete spline with Kepler ID %s", kepid)
-    time = time[finite_i]
-    flux = flux[finite_i]
-    spline = spline[finite_i]
+      # Concatenate the piecewise light curve and spline.
+      time = np.concatenate(all_time)
+      flux = np.concatenate(all_flux)
+      spline = np.concatenate(spline)
 
-  # "Flatten" the light curve (remove low-frequency variability) by dividing by
-  # the spline.
-  flux /= spline
+      # In rare cases the piecewise spline contains NaNs in places the spline could
+      # not be fit. We can't normalize those points if the spline isn't defined
+      # there. Instead we just remove them.
+      finite_i = np.isfinite(spline)
+      if not np.all(finite_i):
+        tf.logging.warn("Incomplete spline with Kepler ID %s", kepid)
+        time = time[finite_i]
+        flux = flux[finite_i]
+        spline = spline[finite_i]
 
-  return time, flux
+      # "Flatten" the light curve (remove low-frequency variability) by dividing by
+      # the spline.
+      flux /= spline
+
+      return time, flux
 
 
 def phase_fold_and_sort_light_curve(time, flux, period, t0):
